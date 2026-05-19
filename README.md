@@ -1,9 +1,5 @@
 # Mi Spring App — Guerrero-post2-u12
-
-![CI/CD Status](https://github.com/guerrero/Guerrero-post2-u12/actions/workflows/ci.yml/badge.svg)
-![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3-brightgreen?logo=springboot)
-![Docker](https://img.shields.io/badge/Docker-Hub-blue?logo=docker)
+## Juan Pablo Guerrero Hernanez - 02230132029
 
 ## Descripción
 
@@ -181,13 +177,3 @@ mvn clean verify
 # Iniciar la aplicación
 mvn spring-boot:run
 ```
-
----
-
-## Historial de Commits
-
-| # | Commit | Descripción |
-|---|--------|-------------|
-| 1 | `ci: agregar pipeline GitHub Actions con Docker Hub publish` | Workflow YAML inicial con jobs build-and-test y docker-publish |
-| 2 | `fix: corregir condición de rama en docker-publish y agregar caché Maven` | Mejoras al pipeline: condición `if` y optimización de caché |
-| 3 | `docs: actualizar README con badge CI/CD, instrucciones Docker y Secrets` | Documentación completa del pipeline y guía de configuración |
