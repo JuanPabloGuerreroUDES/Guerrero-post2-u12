@@ -1,0 +1,109 @@
+# ══════════════════════════════════════════════════════════════════
+# .github/workflows/ci.yml
+# Pipeline CI/CD — Guerrero-post2-u12
+# ══════════════════════════════════════════════════════════════════
+# Este workflow se activa automáticamente en cada push o pull
+# request a la rama principal (main). Ejecuta tres etapas:
+#
+#   Job 1 — build-and-test   : Compila, corre pruebas y genera reporte JaCoCo
+#   Job 2 — docker-publish   : Construye imagen Docker y la publica en Docker Hub
+#
+# Requiere los siguientes Secrets en el repositorio:
+#   • DOCKERHUB_USERNAME  → nombre de usuario de Docker Hub
+#   • DOCKERHUB_TOKEN     → Access Token (NO la contraseña) de Docker Hub
+# ══════════════════════════════════════════════════════════════════
+
+name: CI/CD — Build, Test & Docker Publish
+
+# ── Disparadores del pipeline ────────────────────────────────────
+on:
+  push:
+    branches: [main]          # Activa pipeline completo (CI + CD)
+  pull_request:
+    branches: [main]          # Solo CI (el job docker-publish tiene condición de rama)
+
+jobs:
+
+  # ── Job 1: Compilar y ejecutar pruebas con cobertura JaCoCo ────
+  build-and-test:
+    name: 🔨 Build & Test (JaCoCo)
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Obtener el código fuente del repositorio
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      # 2. Configurar JDK 21 con caché de dependencias Maven
+      #    El caché evita re-descargar dependencias en cada ejecución,
+      #    reduciendo el tiempo del pipeline considerablemente.
+      - name: Configurar JDK 21 con caché Maven
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+          cache: maven           # Cachea ~/.m2/repository automáticamente
+
+      # 3. Compilar el proyecto y ejecutar todas las pruebas.
+      #    'mvn clean verify' también ejecuta la fase verify donde
+      #    el plugin JaCoCo genera el reporte HTML y XML de cobertura.
+      - name: Compilar y ejecutar pruebas con cobertura
+        run: mvn clean verify
+
+      # 4. Publicar el reporte JaCoCo como artefacto descargable.
+      #    'if: always()' garantiza que el reporte se suba incluso
+      #    si las pruebas fallan (útil para depuración).
+      - name: Publicar reporte JaCoCo como artefacto
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          retention-days: 7      # El artefacto se conserva 7 días
+
+  # ── Job 2: Construir imagen Docker y publicar en Docker Hub ────
+  docker-publish:
+    name: 🐳 Docker Build & Publish
+    runs-on: ubuntu-latest
+
+    # Este job solo se ejecuta si:
+    #   1. El job build-and-test terminó exitosamente (needs:)
+    #   2. Estamos en la rama main (no en pull_requests)
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      # 1. Obtener el código (necesario para el Dockerfile)
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      # 2. Autenticarse en Docker Hub usando los Secrets del repositorio.
+      #    NUNCA se deben incluir credenciales directamente en el YAML.
+      - name: Autenticarse en Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 3. Extraer metadata para generar los tags de la imagen.
+      #    Se generan dos tags:
+      #      • latest     → siempre apunta al último build de main
+      #      • sha-XXXXXXX → tag inmutable vinculado al commit exacto
+      - name: Extraer metadata para tags de imagen
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/mi-spring-app
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=short
+
+      # 4. Construir la imagen usando el Dockerfile multi-stage
+      #    y publicarla en Docker Hub con ambos tags.
+      - name: Construir y publicar imagen Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
